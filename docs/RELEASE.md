@@ -34,6 +34,8 @@ O gerador instala as dependências MCP pelo lockfile com scripts desabilitados, 
 
 A publicação cria a tag `vVERSAO` no commit exato da versão. Os arquivos são enviados para um rascunho; a release fica pública após a confirmação dos uploads. Falhas deixam o rascunho para repetir o mesmo comando. Uma release já publicada é recusada, e tags de outros commits são preservadas: nesse caso, use uma nova versão.
 
+O upload usa a API pelo ID da release, com autenticação da CLI, inclusive em versões antigas do `gh` que não localizam rascunhos pelo nome da tag. Em uma repetição, somente os arquivos de mesmo nome no rascunho são substituídos.
+
 ## Privacidade e integridade
 
 O Git ignora `.local/`, configurações de agentes, `.env`, credenciais, chaves, dependências instaladas e artefatos. A distribuição dos fontes usa apenas arquivos rastreados, e o empacotador recusa caminhos privados. Isso não substitui revisar o conteúdo antes do commit: nunca coloque credenciais reais nos fontes ou exemplos.

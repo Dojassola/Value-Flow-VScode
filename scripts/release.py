@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT/'artifacts'
@@ -20,7 +21,7 @@ def github(endpoint, missing=False, *fields):
         if missing and 'HTTP 404' in result.stderr:
             return None
         raise RuntimeError(result.stderr.strip() or 'GitHub request failed.')
-    return json.loads(result.stdout)
+    return json.loads(result.stdout) if result.stdout.strip() else None
 
 def repository(url):
     match = re.fullmatch(r'(?:https://github\.com/|git@github\.com:)([\w.-]+/[\w.-]+)', url)
@@ -112,9 +113,20 @@ As análises são estáticas e limitadas. Este gerador confere a integridade dos
                           '--field', 'tag_name='+tag, '--field', 'target_commitish='+commit,
                           '--field', 'name=Code Flow Lens '+version, '--field', 'body=@'+str(notes),
                           '--field', 'draft=true', '--field', 'prerelease='+str('-' in version).lower())
+    else:
+        existing = github('repos/'+repo+'/releases/'+str(existing['id']), False, '--method', 'PATCH', '--field', 'body=@'+str(notes))
     assert existing['draft'], 'Only unpublished drafts may receive or replace assets.'
     files = [*artifacts, checksums]
-    run('gh', 'release', 'upload', tag, *[str(file) for file in files], '--repo', 'github.com/'+repo, '--clobber')
+    upload_url = existing['upload_url'].split('{')[0]
+    assert upload_url.lower() == ('https://uploads.github.com/repos/'+repo+'/releases/'+str(existing['id'])+'/assets').lower(), 'Unexpected upload destination.'
+    old_assets = {asset['name']:asset for asset in existing['assets']}
+    for file in files:
+        if file.name in old_assets:
+            github('repos/'+repo+'/releases/assets/'+str(old_assets[file.name]['id']), False, '--method', 'DELETE')
+        github(upload_url+'?name='+quote(file.name), False, '--method', 'POST',
+               '--header', 'Content-Type: application/octet-stream', '--header', 'Content-Length: '+str(file.stat().st_size),
+               '--input', str(file))
+        print('Uploaded '+file.name, flush=True)
     uploaded = github('repos/'+repo+'/releases/'+str(existing['id']))
     assets = {asset['name']:asset for asset in uploaded['assets']}
     for file in files:
