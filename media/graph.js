@@ -1,0 +1,164 @@
+'use strict';
+(()=>{
+  const vscode=window.cflHost||acquireVsCodeApi(),$=id=>document.getElementById(id);
+  let graph=null,epoch=-1,selected=null,positions=new Map(),elements=new Map(),cards={},displayNodes=[],displayEdges=[];
+  let camera={x:80,y:180,zoom:1},panning=null,spaceDown=false,interacted=false,queued=null,frame=null,focus='all',walk=null;
+  const initMeta=document.querySelector('meta[name="cfl-init"]');
+  const initToken=initMeta?initMeta.content:undefined;
+  const send=(command,data={})=>{try{vscode.postMessage({command,epoch,init:initToken,...data});}catch{}};
+  const showError=message=>{const box=$('error');if(!box)return;box.textContent=message+'\nClick to dismiss. '+(vscode.errorHint||'Details: Output > Code Flow Lens.');box.hidden=false;};
+  window.addEventListener('error',e=>{showError('Interface error: '+e.message);send('uiError',{message:e.message,line:e.lineno,stack:e.error&&e.error.stack});});
+  window.addEventListener('unhandledrejection',e=>{const r=e.reason||{};showError('Interface error: '+(r.message||String(r)));send('uiError',{message:String(r.message||r),stack:r.stack});});
+  const missing=[],need=id=>{const n=$(id);if(!n)missing.push(id);return n;},wire=(id,prop,handler)=>{const n=need(id);if(n)n[prop]=handler;};
+  const on=(id,type,handler)=>{const n=need(id);if(n)n.addEventListener(type,handler);};
+  const viewport=need('viewport'),world=need('world'),nodesEl=need('nodes'),edgesEl=need('edges');
+  const restored=vscode.getState()||{};if(typeof restored.showRefs==='boolean'){const refsBox=need('showRefs');if(refsBox)refsBox.checked=restored.showRefs;}let inspectorVisible=restored.inspectorVisible??window.innerWidth>880;
+  const mainEl=need('main');if(mainEl)mainEl.classList.toggle('with-details',inspectorVisible);
+  const detailsEl=need('details');if(detailsEl)detailsEl.setAttribute('aria-pressed',String(inspectorVisible));
+  const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=String(text);return e;};
+  const button=(text,action,title,command)=>{const b=el('button','',text);if(title)b.title=title;if(command&&vscode.supportsCommand&&!vscode.supportsCommand(command))b.hidden=true;b.addEventListener('click',action);return b;};
+  const errorBox=need('error');if(errorBox)errorBox.addEventListener('click',()=>{errorBox.hidden=true;});
+  function persist(){vscode.setState({graphId:graph?.graphId,camera,selected,inspectorVisible,showRefs:$('showRefs').checked});}
+  function applyCamera(){world.style.transform=`translate(${camera.x}px,${camera.y}px) scale(${camera.zoom})`;$('resetZoom').textContent=Math.round(camera.zoom*100)+'%';persist();}
+  function zoomAt(next,x=viewport.clientWidth/2,y=viewport.clientHeight/2){const zoom=Math.max(.04,Math.min(3,next)),gx=(x-camera.x)/camera.zoom,gy=(y-camera.y)/camera.zoom;camera={x:x-gx*zoom,y:y-gy*zoom,zoom};applyCamera();}
+  function center(id=selected){const p=positions.get(id||graph?.rootId);if(!p)return;camera.x=viewport.clientWidth/2-(p.x+p.width/2)*camera.zoom;camera.y=viewport.clientHeight/2-(p.y+p.height/2)*camera.zoom;applyCamera();}
+  function fit(){const p=[...positions.values()];if(!p.length)return;const x=Math.min(...p.map(n=>n.x)),y=Math.min(...p.map(n=>n.y)),right=Math.max(...p.map(n=>n.x+n.width)),bottom=Math.max(...p.map(n=>n.y+n.height));camera.zoom=Math.max(.04,Math.min(1.1,(viewport.clientWidth-80)/(right-x),(viewport.clientHeight-80)/(bottom-y)));camera.x=viewport.clientWidth/2-(x+right)/2*camera.zoom;camera.y=viewport.clientHeight/2-(y+bottom)/2*camera.zoom;applyCamera();}
+  function linesOf(n){if(n.code!==undefined)return n.code.split('\n').map((text,i)=>({line:(n.sourceStartLine||n.location?.line||1)+i,text}));return cards[n.id]?.lines||[];}
+  function haystack(n){return(n.name+' '+n.location?.file+' '+(n.roles||[]).join(' ')+' '+linesOf(n).map(l=>l.text).join(' ')).toLowerCase();}
+  function projected(){
+    let ns=graph?.nodes||[],es=graph?.edges||[];
+    if(graph?.kind==='code-flow'&&$('edgeMode').value==='data')es=graph.dataEdges||[];
+    if(!$('showRefs').checked&&graph?.kind!=='code-flow'&&graph?.kind!=='react-hierarchy'){
+      const hidden=new Set(ns.filter(n=>['referenceFile','referenceOccurrence'].includes(n.type)).map(n=>n.id));
+      const extra=[];
+      for(const e of es.filter(e=>!hidden.has(e.from)&&hidden.has(e.to))){const q=[e.to],seen=new Set(q);for(let i=0;i<q.length&&i<100;i++)for(const x of es.filter(x=>x.from===q[i])){if(!hidden.has(x.to)){if(x.to!==e.from)extra.push({...x,id:'collapsed:'+e.from+'|'+x.to,from:e.from,type:'used_inside',label:'used inside'});}else if(!seen.has(x.to)){q.push(x.to);seen.add(x.to);}}}
+      ns=ns.filter(n=>!hidden.has(n.id));es=[...es.filter(e=>!hidden.has(e.from)&&!hidden.has(e.to)),...extra];
+    }
+    if(graph?.kind==='code-flow'&&$('edgeMode').value!=='data')ns=ns.filter(n=>!['external','opaque-call-result'].includes(n.role)&&(!n.unreachable||n.id===selected));
+    if(focus!=='all'&&selected){const seen=new Set([selected]),q=[selected];for(let i=0;i<q.length;i++)for(const e of es){const next=focus==='incoming'?e.to===q[i]?e.from:null:e.from===q[i]?e.to:null;if(next&&!seen.has(next)){seen.add(next);q.push(next);}}ns=ns.filter(n=>seen.has(n.id));}
+    const query=$('search').value.toLowerCase();if(query)ns=ns.filter(n=>haystack(n).includes(query));
+    const ids=new Set(ns.map(n=>n.id));es=es.filter(e=>ids.has(e.from)&&ids.has(e.to));
+    return{nodes:ns,edges:[...new Map(es.map(e=>[e.id,e])).values()]};
+  }
+  function layout(nodes){
+    const result=new Map(),groups=new Map(),withCode=$('showCode').checked;
+    for(const n of nodes){const layer=n.layer||0;if(!groups.has(layer))groups.set(layer,[]);groups.get(layer).push(n);}
+    const dims=n=>{if(graph.kind==='class-diagram'){const u=n.uml||{},rows=5+(u.fields?.length||0)+(u.methods?.length||0)+(u.hooks?.length||0);return{width:390,height:Math.max(150,Math.min(520,74+rows*18))};}return{width:withCode?440:290,height:withCode?110+Math.max(2,Math.min(14,linesOf(n).length))*17:116};};
+    if(graph.kind==='code-flow'||graph.kind==='simulation'){
+      let y=0;for(const [layer,items]of[...groups].sort((a,b)=>a[0]-b[0])){
+        items.sort((a,b)=>a.start-b.start||a.id.localeCompare(b.id));let maxHeight=0;
+        items.forEach((n,i)=>{const d=dims(n);maxHeight=Math.max(maxHeight,d.height);result.set(n.id,{x:(i-(items.length-1)/2)*(d.width+95),y,...d});});y+=maxHeight+85;
+      }
+    }else for(const [layer,items]of groups){items.sort((a,b)=>(b.id===graph.rootId)-(a.id===graph.rootId)||a.name.localeCompare(b.name)||a.id.localeCompare(b.id));const total=items.reduce((s,n)=>s+dims(n).height+38,0);let y=-total/2;for(const n of items){const d=dims(n);result.set(n.id,{x:layer*(d.width+115),y,...d});y+=d.height+38;}}
+    return result;
+  }
+  const svg=(tag,attrs)=>{const e=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const[k,v]of Object.entries(attrs||{}))e.setAttribute(k,String(v));return e;};
+  function renderEdges(){const frag=document.createDocumentFragment(),defs=svg('defs');for(const [id,fill]of[['arrow','var(--edge)'],['arrow-out','var(--accent)'],['arrow-in','var(--ok)'],['arrow-walked','var(--warn)']]){const marker=svg('marker',{id,markerWidth:8,markerHeight:8,refX:7,refY:3,orient:'auto'});marker.append(svg('path',{d:'M0,0 L0,6 L7,3 Z',fill}));defs.append(marker);}frag.append(defs);
+    for(const e of displayEdges){const a=positions.get(e.from),b=positions.get(e.to);if(!a||!b)continue;let d,mx,my;
+      if(graph.kind==='code-flow'||graph.kind==='simulation'){
+        const x1=a.x+a.width/2,x2=b.x+b.width/2,y1=a.y+a.height,y2=b.y;mx=(x1+x2)/2;my=(y1+y2)/2;
+        if(y2>y1)d=`M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`;
+        else{const bend=Math.max(a.x+a.width,b.x+b.width)+55;d=`M${a.x+a.width},${a.y+a.height/2} C${bend},${a.y+a.height/2} ${bend},${b.y+b.height/2} ${b.x+b.width},${b.y+b.height/2}`;mx=bend;my=(a.y+b.y)/2;}
+      }else{const right=b.x>=a.x+a.width,x1=right?a.x+a.width:a.x,x2=right?b.x:b.x+b.width,y1=a.y+a.height/2,y2=b.y+b.height/2;mx=(x1+x2)/2;my=(y1+y2)/2;d=a.x===b.x?`M${a.x+a.width},${y1} C${a.x+a.width+100},${y1} ${a.x+a.width+100},${y2} ${b.x+b.width},${y2}`:`M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`;}
+      const walked=walk?.edges.includes(e.id),isOut=e.from===selected,isIn=e.to===selected,state=walked?'walked':isOut&&isIn?'out in':isOut?'out':isIn?'in':selected?'dim':'';
+      const p=svg('path',{d,class:'edge '+e.type+' '+state,'marker-end':`url(#arrow${walked?'-walked':isOut?'-out':isIn?'-in':''})`});p.dataset.from=e.from;p.dataset.to=e.to;frag.append(p);
+      if(displayEdges.length<350){const label=svg('text',{x:mx+3,y:my-6,class:'edge-label '+state,'text-anchor':'middle'});label.textContent=(e.label||e.type.replaceAll('_',' ')).slice(0,50);frag.append(label);}
+    }edgesEl.replaceChildren(frag);
+  }
+  function paintCode(text){const line=el('span','code-text');const pattern=/(\/\/.*$|\/\*.*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b(?:const|let|var|function|return|if|else|for|while|switch|case|break|continue|throw|try|catch|finally|class|public|private|protected|static|void|int|long|double|new|this|import|export|from|async|await|extends|true|false|null|undefined)\b|\b\d+(?:\.\d+)?\b)/g;let index=0;for(const match of text.matchAll(pattern)){line.append(document.createTextNode(text.slice(index,match.index)));const token=match[0],cls=token.startsWith('//')||token.startsWith('/*')?'tok-comment':/^['"`]/.test(token)?'tok-string':/^\d/.test(token)?'tok-number':'tok-keyword';line.append(el('span',cls,token));index=match.index+token.length;}line.append(document.createTextNode(text.slice(index)));return line;}
+  function codeView(node,limit=14){const box=el('div','code-block');const lines=linesOf(node);for(const source of lines.slice(0,limit)){const row=el('div','code-line');const number=button(String(source.line),e=>{e.stopPropagation();send('openCodeLine',{graphId:graph.graphId,nodeId:node.id,line:source.line});},'Open this line');number.className='line-number';if(graph.kind==='runtime-timeline'){number.disabled=true;number.title='Evidence line (not source code)';}row.append(number,paintCode(source.text));box.append(row);}if(!lines.length)box.append(el('span','note','Source loading / unavailable'));if(lines.length>limit)box.append(el('span','more-code',`... ${lines.length-limit} more lines (${graph.kind==='runtime-timeline'?'Details':'Open source'})`));return box;}
+  function umlView(node){const box=el('div','uml-box');box.append(el('div','uml-stereotype','<<'+(node.stereotype||'class')+'>>'),el('div','uml-title',node.name));const u=node.uml||{};const metrics=el('div','uml-metrics',`fan-in ${u.fanIn||0} | fan-out ${u.fanOut||0}`);box.append(metrics);const addSection=(title,items)=>{if(!items?.length)return;box.append(el('div','uml-separator'),el('div','uml-section-title',title));for(const item of items.slice(0,24))box.append(el('div','uml-member',item));};addSection('attributes',u.fields);addSection('operations',u.methods);addSection('hooks',u.hooks);return box;}
+  function expansionButton(node,direction){const status=node.callHierarchy?.[direction],name=direction==='incoming'?'Callers':'Callees';const b=button(status==='loaded'?name+' loaded':'+ '+name,e=>{e.stopPropagation();select(node.id);send('expand',{graphId:graph.graphId,nodeId:node.id,direction});});b.dataset.direction=direction;b.disabled=graph.readOnlySnapshot||graph.analysis.busy||graph.analysis.stale||status==='unavailable'||status==='loaded';return b;}
+  function refsButton(node){const b=button(node.referenceExpansion==='loaded'?'Refs loaded':'+ Refs',e=>{e.stopPropagation();select(node.id);send('expandReferences',{graphId:graph.graphId,nodeId:node.id});});b.className='expand-references';b.disabled=graph.readOnlySnapshot||graph.analysis.busy||graph.analysis.stale||node.referenceExpansion==='loaded';return b;}
+  function legend(){const wrap=el('span','edge-legend');for(const[cls,text,title]of[['out','\u2192 out','Arrow leaving the selected node'],['in','\u2190 in','Arrow entering the selected node'],['walked','walked path','Edges on the active walk (no code executed)']]){const chip=el('span','legend-chip '+cls,text);chip.title=title;wrap.append(chip);}return wrap;}
+  function select(id){selected=id;if(focus!=='all')render();else{elements.forEach((element,key)=>element.classList.toggle('selected',key===id));renderEdges();renderInspector();}send('selected',{graphId:graph.graphId,nodeId:id});persist();}
+  function showReferences(container,node){
+    const groups=node.references?[node]:(graph.nodes||[]).filter(n=>n.type==='referenceFile'&&n.ownerSymbolId===node.id);
+    for(const group of groups){const details=el('details','reference-group');details.open=groups.length<4;details.append(el('summary','',`${group.location.file} (${group.references.length})`));
+      group.references.slice(0,200).forEach((ref,index)=>{const row=el('div','reference-row'),open=button(`${ref.usageKind} | line ${ref.location.line}`,()=>send('openReference',{graphId:graph.graphId,nodeId:group.id,index}));open.className='location reference-open';const trace=button('Trace owner + uses',()=>send('traceReferenceOwner',{graphId:graph.graphId,nodeId:group.id,index}));trace.className='trace-owner';trace.disabled=graph.readOnlySnapshot||graph.analysis.busy||graph.analysis.stale;row.append(open,trace);details.append(row);});container.append(details);
+    }
+  }
+  function renderInspector(){const container=$('inspector');container.replaceChildren();const node=graph?.nodes.find(n=>n.id===selected);if(!node){container.append(el('p','note','Select a code block or symbol.'));return;}
+    container.append(el('h2','',node.name),el('div','meta',graph.kind==='runtime-timeline'?`Observed at ${new Date(node.observedAt||0).toISOString()}`:`${(node.roles||[node.role||node.type]).join(' + ')} | ${node.location?.file||''}:${node.location?.line||''}`));
+    const actions=el('div','inspector-actions');if(graph.kind!=='runtime-timeline')actions.append(button('Open source',()=>send('openNode',{graphId:graph.graphId,nodeId:node.id})),button('Copy node JSON',()=>send('copyNode',{graphId:graph.graphId,nodeId:node.id})));else container.append(el('h3','','Observed evidence (JSON)'));
+    if(node.callHierarchy)actions.append(expansionButton(node,'incoming'),expansionButton(node,'outgoing'));if(node.referenceExpansion)actions.append(refsButton(node));
+    const valueTraceable=!node.valueKind||['symbol','property','Identifier','PropertyAccessExpression'].includes(node.valueKind);if(!graph.readOnlySnapshot && graph.kind!=='runtime-timeline' && graph.kind!=='simulation' && node.location && valueTraceable){actions.append(button('Value origin',()=>send('valueOrigin',{graphId:graph.graphId,nodeId:node.id})),button('Value destination',()=>send('valueDestination',{graphId:graph.graphId,nodeId:node.id})),button('Simulate value',()=>send('simulateValue',{graphId:graph.graphId,nodeId:node.id})),button('Add to correlation',()=>send('addCorrelation',{graphId:graph.graphId,nodeId:node.id}),undefined,'addCorrelation'));}
+    if(!graph.readOnlySnapshot && node.type!=='codeBlock')actions.append(button('Analyze',()=>send('analyzeSmart',{graphId:graph.graphId,nodeId:node.id}),undefined,'analyzeSmart'),button('Code flow',()=>send('codeFlow',{graphId:graph.graphId,nodeId:node.id})),button('Class / UML',()=>send('classDiagram',{graphId:graph.graphId,nodeId:node.id}),undefined,'classDiagram'));if(!graph.readOnlySnapshot && node.type==='component')actions.append(button('Expand React',()=>send('reactTree',{graphId:graph.graphId,nodeId:node.id}),undefined,'reactTree'),button('Render component',()=>send('previewReact',{graphId:graph.graphId,nodeId:node.id}),undefined,'previewReact'));container.append(actions);
+    if(node.simulationValue!==undefined)container.append(el('p','simulation-value','Simulated value: '+node.simulationValue));
+    if(node.transformation){container.append(el('h3','','Value transformation'),el('p','simulation-value',node.transformation.expression+(node.transformation.truncated?'…':'')));}
+    if(node.conditions?.length){container.append(el('h3','','Path conditions (static)'));for(const condition of node.conditions)container.append(el('p','note',`${condition.kind}: ${condition.expression}${condition.truncated?'…':''} → ${condition.branch}`));}
+    if(node.correlation?.types?.length)container.append(el('p','correlation-summary','Correlation: '+node.correlation.types.join(', ').replaceAll('_',' ')));
+    if(walk){container.append(el('h3','','STATIC WALK - no code executed'));const step=walk.path[walk.path.length-1],choices=(graph.edges||[]).filter(e=>walk.reverse?e.to===step:e.from===step);if(!choices.length)container.append(el('p','note','End of this observed path.'));for(const e of choices){const id=walk.reverse?e.from:e.to,target=graph.nodes.find(n=>n.id===id);const b=button((e.label||e.type)+' -> '+(target?.name||id),()=>{walk.path.push(id);walk.edges.push(e.id);select(id);center(id);});b.className='walk-choice';container.append(b);}container.append(el('p','note',graph.kind==='simulation'?`Step ${walk.path.length}. Values shown were computed by the bounded static interpreter; workspace code was not executed.`:graph.kind==='code-flow'?`Step ${walk.path.length}. Branch choice is manual; conditions are not executed.`:`Step ${walk.path.length}. This walks static relationships only; it is not a recorded runtime path.`));}
+    if(node.callHierarchyNote)container.append(el('p','warning-box',node.callHierarchyNote));
+    if(graph.kind!=='runtime-timeline'&&(node.reads||node.writes)){container.append(el('h3','','Data at this statement'));for(const [label,list]of[['Reads',node.reads||[]],['Writes',node.writes||[]]]){container.append(el('div','meta',label+': '+[...new Set(list.map(x=>x.name))].join(', ')));}
+      for(const ref of [...new Map([...(node.reads||[]),...(node.calls||[])].map(r=>[r.start,r])).values()].slice(0,20)){const b=button('Explore '+ref.name,()=>send('exploreOffset',{graphId:graph.graphId,nodeId:node.id,offset:ref.start}),undefined,'exploreOffset');b.title='Open semantic references/definitions at this exact source token. Not automatic interprocedural value tracking.';b.disabled=!!graph.readOnlySnapshot;container.append(b);}
+    }
+    if(graph.kind==='class-diagram')container.append(umlView(node));
+    if(linesOf(node).length)container.append(codeView(node,80));
+    showReferences(container,node);
+    const es=($('edgeMode').value==='data'&&graph.dataEdges?graph.dataEdges:graph.edges).filter(e=>e.from===node.id||e.to===node.id);container.append(el('h3','',`${es.length} observed relationships`));
+    for(const e of es.slice(0,60)){const other=graph.nodes.find(n=>n.id===(e.from===node.id?e.to:e.from));if(!other)continue;const b=button(`${e.from===node.id?'to':'from'} ${other.name}: ${e.label||e.type}`,()=>{select(other.id);if(!positions.has(other.id)){focus='all';render();}center(other.id);});b.className='location';container.append(b);if(e.props?.length)container.append(el('div','note','Props expressions: '+e.props.slice(0,8).map(p=>p.name+'='+p.expression).join(', ')));}
+    if(graph.analysis.stale)container.append(el('p','warning-box','Source changed. Refresh before following positions.'));
+    for(const warning of graph.analysis.warnings||[])container.append(el('p','warning-box',warning.message));
+    for(const limitation of graph.limitations||[])container.append(el('p','note',limitation));
+  }
+  function render(){if(!graph)return;const projectedGraph=projected();displayNodes=projectedGraph.nodes;displayEdges=projectedGraph.edges;positions=layout(displayNodes);elements=new Map();const frag=document.createDocumentFragment();
+    for(const n of displayNodes){const p=positions.get(n.id),card=el('article','node '+(n.id===graph.rootId?'root ':'')+(graph.kind==='correlation'&&graph.roots?.some(r=>r.id===n.id)?'correlation-root ':'')+(n.id===selected?'selected ':'')+(n.unreachable?'unreachable ':'')+(n.role==='intersection'?'intersection ':'')+(n.role==='inject'?'injected ':''));card.dataset.nodeId=n.id;card.tabIndex=0;card.style.left=p.x+'px';card.style.top=p.y+'px';card.style.width=p.width+'px';card.style.height=p.height+'px';card.title=`${n.name}\n${n.location?.file||''}:${n.location?.line||''}`;
+      card.append(el('div','node-type',(n.roles||[n.role||n.type]).join(' + ')),el('div','node-name',n.name),el('div','node-file',graph.kind==='runtime-timeline'?new Date(n.observedAt||0).toISOString():`${n.location?.file||''}:${n.location?.line||''}`));
+      if(n.type==='referenceFile'){
+        card.append(el('p','note',`${n.references?.length||0} reference(s) in this file. Select for locations / Trace owner.`));
+        for(const ref of (n.references||[]).slice(0,3))card.append(el('div','node-file',`Line ${ref.location.line} - ${ref.usageKind}`));
+      }else if(graph.kind==='class-diagram')card.append(umlView(n));else if($('showCode').checked)card.append(codeView(n));
+      if(n.simulationValue!==undefined)card.append(el('div','value-chip','value = '+n.simulationValue));
+      if(n.correlation?.types?.length)card.append(el('div','correlation-chip',n.correlation.types.join(' · ').replaceAll('_',' ')));
+      const actions=el('div','node-actions');if(n.callHierarchy)actions.append(expansionButton(n,'incoming'),expansionButton(n,'outgoing'));if(n.referenceExpansion)actions.append(refsButton(n));if(!graph.readOnlySnapshot && n.type==='component')actions.append(button('+ JSX',e=>{e.stopPropagation();send('reactTree',{graphId:graph.graphId,nodeId:n.id});}));card.append(actions);
+      card.addEventListener('click',()=>select(n.id));card.addEventListener('dblclick',e=>{if(graph.kind!=='runtime-timeline'&&!e.target.closest('button'))send('openNode',{graphId:graph.graphId,nodeId:n.id});});card.addEventListener('keydown',e=>{if(e.target===card&&e.key==='Enter'){e.preventDefault();select(n.id);if(graph.kind!=='runtime-timeline')send('openNode',{graphId:graph.graphId,nodeId:n.id});}});elements.set(n.id,card);frag.append(card);
+    }
+    nodesEl.replaceChildren(frag);renderEdges();renderInspector();$('empty').hidden=displayNodes.length>0;$('empty').textContent='No blocks match this view. Use All or clear the filter.';
+    const count=graph.analysis.counts||{};
+    $('stats').textContent=`${displayNodes.length} visible / ${graph.nodes.length} total | ${displayEdges.length}/${graph.kind==='code-flow'&&$('edgeMode').value==='data'?(graph.dataEdges||[]).length:graph.edges.length} edges`+(graph.kind==='correlation'?` | ${count.correlations||0} intersections`:` | ${count.references||0} refs | ${count.callers||0} callers | ${count.callees||0} callees`);
+    const hiddenRefs=graph.nodes.filter(n=>n.type==='referenceFile'&&!displayNodes.some(d=>d.id===n.id));
+    $('viewNotice').hidden=!hiddenRefs.length;
+    $('viewNoticeText').textContent=hiddenRefs.length?`${hiddenRefs.reduce((sum,n)=>sum+(n.references?.length||0),0)} reference(s) in ${hiddenRefs.length} file group(s) are hidden by this view. They have not been removed from the analysis.`:'';
+    $('title').textContent='Code Flow Lens - '+graph.target.name;const help=document.querySelector('.navigation-help');if(help)help.replaceChildren(document.createTextNode(graph.kind==='runtime-timeline'?'Drag to pan - Ctrl + wheel to zoom - Select an event for details - ':'Drag to pan - Ctrl + wheel to zoom - Double-click opens source - '),legend());
+    const a=graph.analysis;const backend=!graph.kind?(a.coverage?.kind==='bounded-static-local-semantic-graph'?'LOCAL ENGINE | ':a.coverage?.kind==='bounded-static-language-service-graph'?'VS CODE PROVIDER | ':''):'';const kindLabel=graph.kind==='code-flow'?'AST code blocks':graph.kind==='value-flow'?'INTERPROCEDURAL VALUE FLOW':graph.kind==='correlation'?'MULTI-SYMBOL CORRELATION':graph.kind==='simulation'?'STATIC VALUE SIMULATION':graph.kind==='react-hierarchy'?'Static JSX hierarchy':graph.kind==='class-diagram'?'UML / dependency diagram':graph.kind==='runtime-timeline'?'OBSERVED RUNTIME | chronological edges, NOT causality':'Semantic relationships';const status=a.stale?'Source changed. Refresh.':a.busy?'Analyzing: '+(a.pending||[]).join(', '):walk?'Static path walk - no workspace code executed':a.warnings?.length?`${backend}${a.warnings.length} notice(s); inspect Details`:`${backend}${kindLabel} | ${a.timings?.lastOperationMs||0} ms`;
+    $('status').textContent=(graph.kind==='runtime-timeline'?'OBSERVED RUNTIME | chronology, NOT causality | ':'')+status;
+    $('refresh').textContent=graph.kind==='runtime-timeline'?'Frozen observation':graph.readOnlySnapshot?'Analyze in editor':'Refresh';$('refresh').disabled=graph.kind==='runtime-timeline';$('origin').textContent=graph.kind==='runtime-timeline'?'Earlier':'Origin';$('destination').textContent=graph.kind==='runtime-timeline'?'Later':'Destination';
+    for(const id of ['analyzeSmart','relations','valueTrace','correlate','simulateValue','classDiagram','codeFlow','reactTree','previewReact'])$(id).disabled=!!graph.readOnlySnapshot;$('status').title=(a.warnings||[]).map(w=>w.message).join('\n');$('status').classList.toggle('warning',!!a.warnings?.length||a.stale);
+    $('cancel').hidden=!a.busy;$('export').disabled=false;$('edgeMode').disabled=!['code-flow'].includes(graph.kind);$('walk').disabled=!['code-flow','simulation','value-flow','correlation'].includes(graph.kind)||a.stale;
+    $('walkBack').hidden=!walk;$('walkReverse').hidden=!walk;
+    for(const[id,kind]of[['relations',undefined],['valueTrace','value-flow'],['correlate','correlation'],['simulateValue','simulation'],['classDiagram','class-diagram'],['codeFlow','code-flow'],['reactTree','react-hierarchy']])$(id).classList.toggle('primary',graph.kind===kind);
+    send('rendered',{nodeCount:displayNodes.length});applyCamera();
+  }
+  window.addEventListener('message',event=>{const m=event.data;if(m?.type==='flow:focusNode'&&m.epoch===epoch&&m.graphId===graph?.graphId){select(m.nodeId);focus='all';render();center(m.nodeId);return;}if(m?.type!=='flow:state'||m.epoch<epoch)return;if(m.epoch===epoch&&m.graph?.graphId===graph?.graphId&&Number.isFinite(m.graph?.revision)&&m.graph.revision<(graph?.revision||0))return;if(queued&&queued.epoch===m.epoch&&queued.graph?.graphId===m.graph?.graphId&&Number.isFinite(m.graph?.revision)&&m.graph.revision<(queued.graph?.revision||0))return;queued=m;if(frame)return;frame=requestAnimationFrame(()=>{frame=null;const state=queued;queued=null;const changed=state.epoch!==epoch||state.graph?.graphId!==graph?.graphId;epoch=state.epoch;
+      if(state.error)showError(state.error);if(!state.graph){graph=null;selected=null;positions.clear();elements.clear();displayNodes=[];displayEdges=[];nodesEl.replaceChildren();edgesEl.replaceChildren();$('cancel').hidden=!state.loading;$('export').disabled=true;$('walk').disabled=true;for(const id of ['analyzeSmart','relations','valueTrace','correlate','simulateValue','classDiagram','codeFlow','reactTree','previewReact'])$(id).disabled=!!state.loading;$('inspector').replaceChildren(el('p','note',state.loading?'Analysis in progress.':'Select a node for details.'));$('empty').hidden=false;$('empty').textContent=state.loading?'Analyzing '+state.loading+'...':'Choose a symbol in the editor.';$('status').textContent=state.loading?'Starting analysis...':'Interface ready. Waiting for the analysis engine...';return;}
+      graph=state.graph;cards=state.cards||{};if(changed){$('search').value='';selected=graph.selectedNodeId||graph.rootId;focus='all';walk=null;interacted=false;$('edgeMode').value=graph.kind==='code-flow'?'control':'control';}
+      if(!graph.nodes.some(n=>n.id===selected))selected=graph.rootId;
+      render();if(!interacted){if(graph.kind==='code-flow'||graph.kind==='simulation')center(selected);else fit();}
+    });});
+  function endPan(e){if(!panning||e.pointerId!==undefined&&e.pointerId!==panning.id)return;const id=panning.id;panning=null;viewport.classList.remove('panning');if(viewport.hasPointerCapture(id))viewport.releasePointerCapture(id);}
+  if(viewport){
+    viewport.addEventListener('pointerdown',e=>{const onControl=e.target.closest('.node,button,input,select');if(!(e.button===1||e.button===0&&(!onControl||spaceDown)))return;interacted=true;panning={id:e.pointerId,x:e.clientX,y:e.clientY,cx:camera.x,cy:camera.y};viewport.setPointerCapture(e.pointerId);viewport.classList.add('panning');e.preventDefault();});
+    viewport.addEventListener('pointermove',e=>{if(!panning||panning.id!==e.pointerId)return;camera.x=panning.cx+e.clientX-panning.x;camera.y=panning.cy+e.clientY-panning.y;applyCamera();});
+    viewport.addEventListener('pointerup',endPan);viewport.addEventListener('pointercancel',endPan);viewport.addEventListener('lostpointercapture',endPan);
+    viewport.addEventListener('auxclick',e=>{if(e.button===1)e.preventDefault();});
+    viewport.addEventListener('wheel',e=>{if(e.target.closest('#inspector'))return;e.preventDefault();interacted=true;if(e.ctrlKey||e.metaKey){const rect=viewport.getBoundingClientRect();zoomAt(camera.zoom*Math.exp(-e.deltaY*.002),e.clientX-rect.left,e.clientY-rect.top);}else{camera.x-=e.shiftKey?e.deltaY:e.deltaX;camera.y-=e.shiftKey?0:e.deltaY;applyCamera();}},{passive:false});
+  }
+  window.addEventListener('keydown',e=>{if(e.target.closest('input,textarea,select'))return;if(e.code==='Space'){spaceDown=true;e.preventDefault();}if(e.key.toLowerCase()==='f'){fit();interacted=true;}if(e.key==='Escape'){focus='all';walk=null;render();}const moves={ArrowLeft:[55,0],ArrowRight:[-55,0],ArrowUp:[0,55],ArrowDown:[0,-55]};if(moves[e.key]){e.preventDefault();interacted=true;camera.x+=moves[e.key][0];camera.y+=moves[e.key][1];applyCamera();}});window.addEventListener('keyup',e=>{if(e.code==='Space')spaceDown=false;});window.addEventListener('blur',()=>{spaceDown=false;if(panning)endPan({});});
+  wire('zoomOut','onclick',()=>{interacted=true;zoomAt(camera.zoom/1.2);});wire('zoomIn','onclick',()=>{interacted=true;zoomAt(camera.zoom*1.2);});wire('resetZoom','onclick',()=>{interacted=true;zoomAt(1);});wire('fit','onclick',()=>{interacted=true;fit();});wire('center','onclick',()=>{interacted=true;center();});
+  on('search','input',()=>{render();fit();});
+  function resetView(){if(!graph)return;focus='all';walk=null;$('search').value='';$('showRefs').checked=true;selected=graph.rootId;render();fit();persist();}
+  wire('resetView','onclick',resetView);wire('showHiddenReferences','onclick',resetView);
+  wire('diagnostics','onclick',()=>send('diagnostics',{graphId:graph?.graphId}));for(const id of ['showRefs','showCode','edgeMode'])on(id,'change',()=>{focus='all';walk=null;render();fit();});
+  for(const[id,mode]of[['origin','incoming'],['destination','outgoing'],['allPaths','all']])wire(id,'onclick',()=>{focus=mode;if(graph?.kind==='code-flow'&&mode!=='all')$('edgeMode').value='data';walk=null;render();fit();});
+  wire('walk','onclick',()=>{focus='all';$('edgeMode').value='control';walk=walk?null:{path:[selected||graph.rootId],edges:[],reverse:false};render();center();});wire('walkBack','onclick',()=>{if(walk?.path.length>1){walk.path.pop();walk.edges.pop();select(walk.path[walk.path.length-1]);center();}});wire('walkReverse','onclick',()=>{if(walk){walk.reverse=!walk.reverse;$('walkReverse').textContent=walk.reverse?'Forward step':'Reverse step';renderInspector();}});
+  for(const[id,command]of[['analyzeSmart','analyzeSmart'],['relations','relations'],['valueTrace','valueTrace'],['correlate','showCorrelation'],['simulateValue','simulateValue'],['classDiagram','classDiagram'],['codeFlow','codeFlow'],['reactTree','reactTree'],['previewReact','previewReact'],['javaHelp','javaHelp']])wire(id,'onclick',()=>send(command,{graphId:graph?.graphId,nodeId:selected}));
+  for(const[id,command]of[['runtime','runtime'],['refresh','refresh'],['cancel','cancel'],['export','export'],['shortcut','shortcut']])wire(id,'onclick',()=>send(command,{graphId:graph?.graphId}));
+  wire('details','onclick',()=>{inspectorVisible=!inspectorVisible;mainEl?.classList.toggle('with-details',inspectorVisible);detailsEl?.setAttribute('aria-pressed',String(inspectorVisible));persist();});
+  for(const id of ['title','stats','empty','status','viewNotice','viewNoticeText','inspector'])need(id);
+  if(missing.length){const unique=[...new Set(missing)];send('uiError',{message:'Interface HTML is missing '+unique.length+' element(s) required by this script: '+unique.join(', '),missing:unique});}
+  if(viewport)new ResizeObserver(()=>{if(graph&&!interacted)center();}).observe(viewport);
+  const statusEl=$('status');if(statusEl)statusEl.textContent='Interface ready. Waiting for the analysis engine...';
+  const exportEl=$('export');if(exportEl)exportEl.disabled=true;
+  send('ready');
+})();

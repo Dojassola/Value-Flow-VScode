@@ -1,0 +1,408 @@
+{
+  "name": "code-flow-lens",
+  "displayName": "Code Flow Lens",
+  "description": "Interactive code-flow visualization for VS Code with an embedded semantic engine, interprocedural value tracing, multi-symbol correlation, safe value simulation, React hierarchy, Java support and optional runtime observation.",
+  "version": "0.13.5",
+  "publisher": "local-dev",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Dojassola/Value-Flow-VScode.git"
+  },
+  "homepage": "https://github.com/Dojassola/Value-Flow-VScode#readme",
+  "bugs": {
+    "url": "https://github.com/Dojassola/Value-Flow-VScode/issues"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Visualization"
+  ],
+  "activationEvents": [
+    "onCommand:codeFlowLens.showSymbolFlow",
+    "onCommand:codeFlowLens.exportGraph",
+    "onCommand:codeFlowLens.copyGraphJson",
+    "onCommand:codeFlowLens.configureShortcut",
+    "onCommand:codeFlowLens.showLogs",
+    "onCommand:codeFlowLens.showCodeFlow",
+    "onCommand:codeFlowLens.showReactHierarchy",
+    "onCommand:codeFlowLens.previewReact",
+    "onCommand:codeFlowLens.diagnoseJava",
+    "onCommand:codeFlowLens.openRuntime",
+    "onCommand:codeFlowLens.diagnoseRelations",
+    "onCommand:codeFlowLens.traceValue",
+    "onCommand:codeFlowLens.simulateValue",
+    "onCommand:codeFlowLens.addCorrelationSymbol",
+    "onCommand:codeFlowLens.showCorrelation",
+    "onCommand:codeFlowLens.clearCorrelation",
+    "onStartupFinished",
+    "onCommand:codeFlowLens.analyzeSmart",
+    "onCommand:codeFlowLens.showClassDiagram",
+    "onWebviewPanel:codeFlowLens.graph"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "codeFlowLens.showSymbolFlow",
+        "title": "Show Symbol Flow",
+        "category": "Code Flow Lens"
+      },
+      {
+        "command": "codeFlowLens.analyzeSmart",
+        "title": "Analyze Flow (Smart)",
+        "category": "Code Flow Lens"
+      },
+      {
+        "command": "codeFlowLens.showClassDiagram",
+        "title": "Analyze Class / UML Diagram",
+        "category": "Code Flow Lens"
+      },
+      {
+        "command": "codeFlowLens.exportGraph",
+        "title": "Export Graph JSON",
+        "category": "Code Flow Lens"
+      },
+      {
+        "command": "codeFlowLens.copyGraphJson",
+        "title": "Copy Graph JSON",
+        "category": "Code Flow Lens"
+      },
+      {
+        "command": "codeFlowLens.configureShortcut",
+        "title": "Configure Shortcut",
+        "category": "Code Flow Lens"
+      },
+      {
+        "command": "codeFlowLens.showLogs",
+        "title": "Show Logs",
+        "category": "Code Flow Lens"
+      },
+      {
+        "command": "codeFlowLens.showCodeFlow",
+        "title": "Show Code Flow (AST)",
+        "category": "Code Flow Lens"
+      },
+      {
+        "command": "codeFlowLens.showReactHierarchy",
+        "title": "Show React Component Hierarchy",
+        "category": "Code Flow Lens"
+      },
+      {
+        "command": "codeFlowLens.previewReact",
+        "title": "Preview React Component",
+        "category": "Code Flow Lens"
+      },
+      {
+        "command": "codeFlowLens.diagnoseJava",
+        "title": "Diagnose Java Support",
+        "category": "Code Flow Lens"
+      },
+      {
+        "command": "codeFlowLens.openRuntime",
+        "title": "Open Runtime Observer",
+        "category": "Code Flow Lens"
+      },
+      {
+        "command": "codeFlowLens.diagnoseRelations",
+        "title": "Diagnose Relationships",
+        "category": "Code Flow Lens"
+      },
+      {
+        "command": "codeFlowLens.traceValue",
+        "title": "Trace Value Flow",
+        "category": "Code Flow Lens"
+      },
+      {
+        "command": "codeFlowLens.simulateValue",
+        "title": "Simulate Selected Value",
+        "category": "Code Flow Lens"
+      },
+      {
+        "command": "codeFlowLens.addCorrelationSymbol",
+        "title": "Add Symbol to Correlation",
+        "category": "Code Flow Lens"
+      },
+      {
+        "command": "codeFlowLens.showCorrelation",
+        "title": "Correlate Selected Symbols",
+        "category": "Code Flow Lens"
+      },
+      {
+        "command": "codeFlowLens.clearCorrelation",
+        "title": "Clear Correlation Symbols",
+        "category": "Code Flow Lens"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "codeFlowLens.showSymbolFlow",
+          "group": "navigation@20",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "codeFlowLens.showCodeFlow",
+          "group": "navigation@21",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "codeFlowLens.showReactHierarchy",
+          "group": "navigation@22",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "codeFlowLens.traceValue",
+          "group": "navigation@23",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "codeFlowLens.simulateValue",
+          "group": "navigation@24",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "codeFlowLens.addCorrelationSymbol",
+          "group": "navigation@25",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "codeFlowLens.showCorrelation",
+          "group": "navigation@26",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "codeFlowLens.analyzeSmart",
+          "group": "navigation@20.5",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "codeFlowLens.showClassDiagram",
+          "group": "navigation@22.5",
+          "when": "editorTextFocus"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "codeFlowLens.showSymbolFlow",
+          "group": "navigation@20",
+          "when": "editorTextFocus"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "codeFlowLens.showSymbolFlow",
+        "key": "ctrl+alt+c",
+        "mac": "cmd+alt+c",
+        "when": "editorTextFocus"
+      }
+    ],
+    "configuration": {
+      "title": "Code Flow Lens",
+      "properties": {
+        "codeFlowLens.openMode": {
+          "type": "string",
+          "enum": [
+            "tab",
+            "beside"
+          ],
+          "default": "tab",
+          "enumDescriptions": [
+            "Open the graph as a full editor tab in the current editor group.",
+            "Open the graph in a side-by-side editor group."
+          ],
+          "description": "Where Code Flow Lens opens the graph."
+        },
+        "codeFlowLens.callDepth": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 1,
+          "maximum": 8,
+          "description": "Initial call depth when lazyExpansion is false. Lazy mode always starts at 1; manual expansions can continue beyond this depth."
+        },
+        "codeFlowLens.maxReferences": {
+          "type": "integer",
+          "default": 150,
+          "minimum": 0,
+          "maximum": 1000,
+          "description": "Maximum number of symbol references to inspect."
+        },
+        "codeFlowLens.maxCallNodes": {
+          "type": "integer",
+          "default": 80,
+          "minimum": 2,
+          "maximum": 500,
+          "description": "Total graph node budget, now including root, definition and reference-file nodes. Legacy setting name retained for upgrades. Limits are reported in the UI and JSON."
+        },
+        "codeFlowLens.lazyExpansion": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open with one call hop, regardless of callDepth. Expand individual nodes on demand."
+        },
+        "codeFlowLens.semanticEngine": {
+          "type": "string",
+          "enum": [
+            "local",
+            "hybrid",
+            "vscode"
+          ],
+          "default": "local",
+          "enumDescriptions": [
+            "Use the embedded persistent Bloom + AST index for TS/JS/React and the local Java index. Normal navigation does not build a TypeScript Program or wait for VS Code LSP.",
+            "Prefer the embedded engine, but fall back to VS Code providers if a local query fails.",
+            "Use VS Code language providers only (legacy/troubleshooting mode)."
+          ],
+          "description": "Relationship backend. Local mode uses the lightweight embedded index and is the default."
+        },
+        "codeFlowLens.localEngineTimeoutMs": {
+          "type": "integer",
+          "default": 3000,
+          "minimum": 500,
+          "maximum": 10000,
+          "description": "Catastrophic watchdog baseline for the embedded relationship worker. Normal definitions/references/calls are internally bounded AST/index operations and do not use this timeout as their normal latency budget."
+        },
+        "codeFlowLens.localEngineStartupMs": {
+          "type": "integer",
+          "default": 6000,
+          "minimum": 1000,
+          "maximum": 30000,
+          "description": "Maximum startup time for the lightweight embedded worker. Startup is focus-only and does not crawl the monorepo or build a workspace Language Service."
+        },
+        "codeFlowLens.localEngineMaxFiles": {
+          "type": "integer",
+          "default": 8000,
+          "minimum": 200,
+          "maximum": 20000,
+          "description": "Safety ceiling for deep/precision discovery and Java/package scanning. Normal TS/JS relationship navigation uses a bounded package-local AST/module index."
+        },
+        "codeFlowLens.providerTimeoutMs": {
+          "type": "integer",
+          "default": 4000,
+          "minimum": 1000,
+          "maximum": 15000,
+          "description": "Timeout for legacy VS Code provider requests when semanticEngine is hybrid/vscode. Not used by the local engine."
+        },
+        "codeFlowLens.javaCommand": {
+          "type": "string",
+          "default": "java",
+          "description": "JDK 11+ java executable for local AST parsing. The helper parses source only; it never executes project classes.",
+          "scope": "machine"
+        },
+        "codeFlowLens.codeBlockLines": {
+          "type": "integer",
+          "default": 12,
+          "minimum": 3,
+          "maximum": 30,
+          "description": "Source lines shown per semantic card."
+        },
+        "codeFlowLens.runtimeChrome": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Absolute Chrome/Chromium executable for optional runtime observation. Blank enables auto-detection."
+        },
+        "codeFlowLens.runtimeOrigins": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "machine",
+          "description": "Explicit additional origins allowed for runtime observation, for example your staging API. Loading pages can have real side effects. Localhost is allowed by default."
+        },
+        "codeFlowLens.valueEngineTimeoutMs": {
+          "type": "integer",
+          "default": 6000,
+          "minimum": 1000,
+          "maximum": 15000,
+          "description": "Budget for explicit deep value tracing and correlation. Static value simulation uses the lightweight syntax simulator and its own step/time budget, so it does not wait on the precision TypeScript worker."
+        },
+        "codeFlowLens.valueTraceDepth": {
+          "type": "integer",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 8,
+          "description": "Default interprocedural depth for value tracing and multi-symbol correlation."
+        },
+        "codeFlowLens.valueTraceMaxNodes": {
+          "type": "integer",
+          "default": 140,
+          "minimum": 20,
+          "maximum": 300,
+          "description": "Node budget for value tracing/correlation."
+        },
+        "codeFlowLens.simulationMaxSteps": {
+          "type": "integer",
+          "default": 180,
+          "minimum": 20,
+          "maximum": 500,
+          "description": "Maximum AST interpretation steps for lightweight user-supplied value simulation. The simulator is syntax-driven and returns partial results instead of waiting on a workspace TypeScript Program."
+        },
+        "codeFlowLens.simulationTimeBudgetMs": {
+          "type": "integer",
+          "default": 900,
+          "minimum": 150,
+          "maximum": 2500,
+          "description": "Internal wall-clock budget for lightweight static simulation. When reached, Code Flow Lens returns the path collected so far instead of restarting a precision worker."
+        },
+        "codeFlowLens.simulationMaxDepth": {
+          "type": "integer",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 8,
+          "description": "Maximum direct workspace function-call depth for static value simulation."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "check": "node scripts/check.js",
+    "test": "node --test test/*.test.js",
+    "test:browser": "python test/browser_test.py",
+    "package": "python3 scripts/package.py --output artifacts",
+    "release": "python3 scripts/release.py",
+    "release:publish": "python3 scripts/release.py --publish"
+  },
+  "keywords": [
+    "call-graph",
+    "references",
+    "code-navigation",
+    "data-flow",
+    "control-flow",
+    "react",
+    "java",
+    "debugging",
+    "value-flow",
+    "value-tracing",
+    "correlation",
+    "simulation"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Static graph browsing is read-only. Runtime observation and executable previews require a trusted workspace."
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "This release analyzes local filesystem workspaces."
+    }
+  },
+  "files": [
+    "extension.js",
+    "lib/**",
+    "media/**",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "docs/**",
+    "vendor/**",
+    "java/**",
+    "runtime/**"
+  ]
+}

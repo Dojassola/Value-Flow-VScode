@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "code-flow-lens": {
+      "command": "node",
+      "args": ["/caminho/absoluto/code-flow-lens/mcp/server.mjs", "--viewer"]
+    }
+  }
+}

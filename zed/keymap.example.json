@@ -1,0 +1,9 @@
+[
+  {
+    "context": "Editor",
+    "bindings": {
+      "ctrl-alt-v": ["task::Spawn", {"task_name": "Code Flow Lens: Value Flow"}],
+      "ctrl-alt-f": ["task::Spawn", {"task_name": "Code Flow Lens: Code Flow"}]
+    }
+  }
+]

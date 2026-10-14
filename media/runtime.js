@@ -1,0 +1,8 @@
+'use strict';
+(()=>{const vscode=acquireVsCodeApi(),$=id=>document.getElementById(id);let sessionId=null,busy=false;
+ const post=message=>{try{vscode.postMessage(message);}catch{}};
+ window.addEventListener('error',e=>{const box=$('error');if(box)box.textContent='Interface error: '+e.message;post({command:'uiError',message:e.message,line:e.lineno,stack:e.error&&e.error.stack});});
+ function update(){for(const id of ['snapshot','events','compare','screenshot','timeline','stop']){const n=$(id);if(n)n.disabled=busy||!sessionId;}const start=$('start');if(start)start.disabled=busy||!!sessionId;}
+ for(const command of ['start','snapshot','events','compare','screenshot','timeline','stop']){const n=$(command);if(n)n.onclick=()=>{if(busy)return;busy=true;update();const errBox=$('error');if(errBox)errBox.textContent='';const urlEl=$('url');const options={url:urlEl?urlEl.value:''};for(const key of ['captureState','captureBodies','captureText','captureVisual']){const flag=$(key);options[key]=flag?flag.checked:false;}post({command,options});};}
+ window.addEventListener('message',e=>{const m=e.data;if(m.type!=='runtime:result')return;busy=false;const errBox=$('error');if(m.error&&errBox)errBox.textContent=m.error;if(m.sessionId!==undefined)sessionId=m.sessionId;const img=$('image');if(img&&m.image){img.src='data:image/png;base64,'+m.image;img.hidden=false;}const out=$('output');if(m.result&&out)out.textContent=JSON.stringify(m.result,null,2);const status=$('status');if(status)status.textContent=sessionId?'Observing a separate browser. Use Stop when finished.':'Not recording.';if(img&&!sessionId){img.hidden=true;img.removeAttribute('src');}update();});
+ })();

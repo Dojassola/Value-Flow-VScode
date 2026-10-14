@@ -1,0 +1,10 @@
+'use strict';
+(()=>{const api=acquireVsCodeApi(),$=id=>document.getElementById(id);
+const report=message=>{const box=$('error');if(box)box.textContent=message;try{api.postMessage({command:'uiError',message:String(message)});}catch{}};
+window.addEventListener('error',e=>{report('Interface error: '+e.message);});
+const wire=(id,handler)=>{const n=$(id);if(n)n.onclick=handler;};
+wire('external',()=>api.postMessage({command:'external'}));
+wire('stop',()=>api.postMessage({command:'stop'}));
+const apply=$('apply');
+if(apply)apply.onclick=()=>{try{const propsEl=$('props');if(!propsEl)throw new Error('Props editor missing.');const props=JSON.parse(propsEl.value);if(!props||typeof props!=='object'||Array.isArray(props))throw new Error('Props must be a JSON object.');report(' Building...');const wrapperEl=$('wrapper');api.postMessage({command:'props',props,wrapper:wrapperEl?wrapperEl.value:''});}catch(e){report(e.message);}};
+window.addEventListener('message',e=>{if(e.data?.type==='preview:error'){const box=$('error');if(box)box.textContent=e.data.message;}});})();

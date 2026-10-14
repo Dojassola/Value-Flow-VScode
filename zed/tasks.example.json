@@ -1,0 +1,20 @@
+[
+  {
+    "label": "Code Flow Lens: Value Flow",
+    "command": "node",
+    "args": ["/caminho/para/code-flow-lens/zed/viewer.cjs", "--workspace", "$ZED_WORKTREE_ROOT", "--file", "$ZED_FILE", "--line", "$ZED_ROW", "--column", "$ZED_COLUMN"],
+    "save": "current",
+    "reveal": "always",
+    "hide": "on_success",
+    "allow_concurrent_runs": false
+  },
+  {
+    "label": "Code Flow Lens: Code Flow",
+    "command": "node",
+    "args": ["/caminho/para/code-flow-lens/zed/viewer.cjs", "--workspace", "$ZED_WORKTREE_ROOT", "--file", "$ZED_FILE", "--line", "$ZED_ROW", "--column", "$ZED_COLUMN", "--mode", "code"],
+    "save": "current",
+    "reveal": "always",
+    "hide": "on_success",
+    "allow_concurrent_runs": false
+  }
+]

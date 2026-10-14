@@ -1,0 +1,12 @@
+{
+  "context_servers": {
+    "code-flow-lens": {
+      "command": "node",
+      "args": [
+        "/caminho/para/code-flow-lens/mcp/server.mjs",
+        "--workspace",
+        "/caminho/para/seu/projeto"
+      ]
+    }
+  }
+}

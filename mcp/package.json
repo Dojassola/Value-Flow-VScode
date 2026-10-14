@@ -1,0 +1,13 @@
+{
+  "name": "code-flow-lens-mcp",
+  "version": "0.13.5",
+  "private": true,
+  "type": "module",
+  "description": "Static value provenance and simulation tools shared with Code Flow Lens.",
+  "engines": { "node": ">=20" },
+  "scripts": { "start": "node server.mjs" },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.3.1",
+    "zod": "4.2.0"
+  }
+}
