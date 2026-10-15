@@ -1,4 +1,4 @@
-# Code Flow Lens 0.13.5
+# Code Flow Lens 0.13.6
 
 Ferramenta de análise de código com extensão visual para VS Code, visualizador para Zed e servidor MCP para agentes de IA, voltada a responder quatro perguntas durante desenvolvimento e debugging:
 
@@ -26,11 +26,19 @@ As releases são [geradas e publicadas manualmente pelo computador](docs/RELEASE
 
 ## MCP e Zed
 
-A versão 0.13.5 também oferece um servidor MCP separado, que compartilha os motores da extensão. Ele complementa Graft e Serena com proveniência de valores, transformações/condições, fluxo de controle, simulação, UML, dependências e correlação; a extensão do VS Code continua independente.
+A versão 0.13.6 também oferece um servidor MCP separado, que compartilha os motores da extensão. Ele complementa Graft e Serena com proveniência de valores, transformações/condições, fluxo de controle, simulação, UML, dependências e correlação; a extensão do VS Code continua independente.
 
-Use o pacote `code-flow-lens-portable-0.13.5.zip`, com Node.js 20 ou superior. Ele inclui um instalador que adiciona as tarefas do Zed ou instala a extensão no VS Code. A configuração dos agentes e os limites da análise estão em [MCP para agentes e grafo web](docs/MCP.md).
+Use o pacote `code-flow-lens-portable-0.13.6.zip`, com Node.js 20 ou superior. Ele inclui um instalador que adiciona as tarefas do Zed ou instala a extensão no VS Code. A configuração dos agentes e os limites da análise estão em [MCP para agentes e grafo web](docs/MCP.md).
 
 O pacote também inclui um [visualizador para o Zed](docs/ZED.md): tarefas e atalhos abrem o mesmo grafo no navegador local, com Value Flow, origem/destino, transformações/condições, simulação, Code Flow, UML, dependências e navegação de volta ao arquivo no editor. O visualizador funciona sem configurar o MCP. Com `--viewer`, qualquer agente MCP pode ler a seleção, refazer a análise e destacar evidências na interface.
+
+## Redux
+
+Value Flow também liga leituras de Redux aos reducers registrados na store: estado inicial, alterações, ações, dispatches e dados enviados às ações. Há suporte estático para Redux clássico com `switch`, `reduxsauce` e Redux Toolkit com `createSlice`/`createReducer` e `addCase`.
+
+Selecione, por exemplo, `state.menu.collapsed`, uma variável de `useSelector`/`useAppSelector`, um campo do estado inicial ou uma propriedade no reducer, e abra **Value Flow**. Os cartões Redux mostram o caminho do estado, a store e o tipo da ação; as transformações e condições continuam no painel de detalhes. O mesmo resultado chega à IA pelo MCP, sem configuração adicional.
+
+O grafo descreve alterações possíveis encontradas no código. Não reconstrói a sequência real de dispatches nem o valor atual da store. Middleware, thunks, persistência/rehidratação, reducers injetados, matchers e campos dinâmicos podem exigir análise manual; avisos indicam descobertas incompletas e operações não resolvidas.
 
 ## Instalação
 
@@ -41,13 +49,13 @@ node install.cjs zed
 node install.cjs vscode
 ```
 
-No Zed, o instalador copia os arquivos para `~/.code-flow-lens/0.13.5` e cria/atualiza somente as duas tarefas Code Flow Lens no arquivo global, com backup. As outras tarefas, comentários fora das tarefas atualizadas e atalhos são preservados. No VS Code, instala o VSIX incluído no pacote pela [CLI `code`](https://code.visualstudio.com/docs/configure/command-line); para VSCodium, use `node install.cjs vscode --code-command codium`. No Windows, instale o VSIX pela interface do editor.
+No Zed, o instalador copia os arquivos para `~/.code-flow-lens/0.13.6` e cria/atualiza somente as duas tarefas Code Flow Lens no arquivo global, com backup. As outras tarefas, comentários fora das tarefas atualizadas e atalhos são preservados. No VS Code, instala o VSIX incluído no pacote pela [CLI `code`](https://code.visualstudio.com/docs/configure/command-line); para VSCodium, use `node install.cjs vscode --code-command codium`. No Windows, instale o VSIX pela interface do editor.
 
 Para instalar o VSIX manualmente:
 
 1. Abra **Extensions** no VS Code.
 2. Use **... > Install from VSIX...**.
-3. Selecione `code-flow-lens-0.13.5.vsix`.
+3. Selecione `code-flow-lens-0.13.6.vsix`.
 4. Execute **Developer: Reload Window**.
 
 Atalho padrão:

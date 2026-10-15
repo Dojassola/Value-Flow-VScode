@@ -1,6 +1,6 @@
 {
   "name": "code-flow-lens-mcp",
-  "version": "0.13.5",
+  "version": "0.13.6",
   "private": true,
   "type": "module",
   "description": "Static value provenance and simulation tools shared with Code Flow Lens.",

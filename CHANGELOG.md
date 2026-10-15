@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.13.6 - Redux value provenance
+
+- Added shared static Redux tracing for VS Code, the Zed browser viewer and MCP, using the reducer registration path rather than a variable named `state`.
+- Links initial/preloaded state, selector reads, reducer writes, actions, dispatches and action inputs. Recognizes classic switch reducers, reduxsauce Types/Creators/handlers and Redux Toolkit createSlice/createReducer with addCase.
+- Follows imported aliases, destructured bindings, typed selector/dispatch hooks and statically resolvable custom hook returns. Toolkit writes include assignments, increments, deletes and common array mutations.
+- Redux evidence carries state paths, store locations and action types in JSON and the inspector. Dynamic operations, ambiguous stores and incomplete discovery have explicit partial-analysis warnings.
+- Discovery reserves time for graph construction, and records consumers/writers before expanding ordinary provenance.
+- Validation is limited to source syntax and package integrity. No tests, application execution or editor/browser acceptance were run.
+
 ## 0.13.5 - Exported object usages
 
 - Added manual local release generation/upload, GitHub repository metadata and a portable distribution for Zed/MCP/installer/VSIX. Private plans/reports and local configuration are excluded from Git and packages.

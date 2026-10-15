@@ -23,7 +23,7 @@ const traceLimits = {
 const definitions = [
   {
     name:'trace_value',
-    description:'Follow static value origins and destinations through aliases, properties, destructuring, arguments, callbacks and returns. Returns source excerpts, locations and directed edges. Check analysis.warnings and coverage.cutoffs before concluding that an origin or destination is absent. This complements symbol/reference search; it does not prove runtime execution.',
+    description:'Follow static value origins and destinations through aliases, properties, destructuring, arguments, callbacks and returns. Includes resolvable Redux store paths, initial state, reducer writes, action inputs, dispatches and selector reads (classic Redux, reduxsauce and Redux Toolkit). Returns source excerpts, locations and directed edges. Check analysis.warnings and coverage.cutoffs before concluding that an origin or destination is absent. This complements symbol/reference search; it does not prove runtime execution.',
     schema:z.object({...position,...traceLimits,direction:z.enum(['incoming','outgoing','both']).default('both')}).strict()
   },
   {

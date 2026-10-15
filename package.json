@@ -2,7 +2,7 @@
   "name": "code-flow-lens",
   "displayName": "Code Flow Lens",
   "description": "Interactive code-flow visualization for VS Code with an embedded semantic engine, interprocedural value tracing, multi-symbol correlation, safe value simulation, React hierarchy, Java support and optional runtime observation.",
-  "version": "0.13.5",
+  "version": "0.13.6",
   "publisher": "local-dev",
   "license": "MIT",
   "repository": {

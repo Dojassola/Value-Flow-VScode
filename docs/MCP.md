@@ -4,9 +4,9 @@ O servidor MCP compartilha os motores de análise do Code Flow Lens. Seu foco é
 
 ## Instalação
 
-Extraia `code-flow-lens-portable-0.13.5.zip`. O pacote inclui o parser, o SDK oficial MCP, suas dependências e licenças. Requer Node.js 20 ou superior. Não precisa de Rust nem executa código da aplicação.
+Extraia `code-flow-lens-portable-0.13.6.zip`. O pacote inclui o parser, o SDK oficial MCP, suas dependências e licenças. Requer Node.js 20 ou superior. Não precisa de Rust nem executa código da aplicação.
 
-Para instalar a interface e as tarefas do Zed, execute `node install.cjs zed` na pasta extraída. O servidor fica em `~/.code-flow-lens/0.13.5/mcp/server.mjs`; use seu caminho absoluto na configuração do agente. `node install.cjs vscode` instala o VSIX incluído no pacote. O instalador não configura os agentes automaticamente.
+Para instalar a interface e as tarefas do Zed, execute `node install.cjs zed` na pasta extraída. O servidor fica em `~/.code-flow-lens/0.13.6/mcp/server.mjs`; use seu caminho absoluto na configuração do agente. `node install.cjs vscode` instala o VSIX incluído no pacote. O instalador não configura os agentes automaticamente.
 
 ## Codex, Antigravity e outros agentes
 
@@ -80,6 +80,12 @@ Cada posição pode fornecer `sourceText` com o buffer completo de um arquivo ex
 Os resultados incluem nós, trechos de código, posições, arestas e `analysis`. Nós de valores/simulação também podem incluir `transformation` (expressão e operador) e `conditions` (guardas sintáticas, ramo e posição). Consulte `analysis.warnings`, `analysis.state` e `analysis.coverage.cutoffs` antes de concluir que uma origem/destino não existe. Valores desconhecidos permanecem desconhecidos.
 
 Value Flow representa leituras por `.propriedade` ou `[chave]` em posições separadas antes de expandir as chamadas consumidoras. Referências atravessam reexports, incluindo `export *`. Se a busca estiver limitada ou o índice ainda estiver sendo construído, `VALUE_TRACE_REFERENCES` informa que outros usos podem estar ausentes; refaça a análise após a indexação.
+
+`trace_value` inclui ligações Redux quando a store e o campo podem ser resolvidos estaticamente: estado inicial/preloaded, handlers que escrevem, ações, dispatches, entradas da ação e seletores consumidores. Reconhece Redux clássico com `switch`, `reduxsauce` e Redux Toolkit (`createSlice`, `createReducer`, `addCase`). Aliases e hooks tipados que apontam para `useSelector`/`useDispatch` são resolvidos pelos imports. Nós incluem `redux.statePath`, `redux.store`, `redux.kind` e, quando conhecida, `redux.actionType`.
+
+Exemplo de pedido à IA: “Use Code Flow Lens para rastrear `state.menu.collapsed`: mostre onde nasce, quais reducers alteram, quem dispara essas ações, de onde vêm os dados enviados e quem lê o resultado. Cite arquivos/linhas e os avisos de cobertura.” No modo viewer, a IA usa a seleção do grafo; no modo workspace, informe arquivo e posição para `trace_value`.
+
+`REDUX_DISCOVERY_PARTIAL` indica orçamento/indexação incompleta. `REDUX_DYNAMIC_STATE` informa registro, merge, campo ou handler não resolvido, ou associação ambígua entre stores. As arestas não provam a ordem de execução, a ação mais recente ou a atuação de middleware/thunks/rehidratação. Operações dinâmicas precisam de evidência adicional.
 
 Condições do Value Flow descrevem a estrutura do código; não são resolvidas simbolicamente nem provam que um ramo executou. A simulação interpreta as condições que consegue calcular e mantém alternativas incertas explícitas. Proveniência por nome/binding não é uma reconstrução completa de todas as versões do valor após cada escrita. UML e dependências descrevem o arquivo selecionado; não são um mapa transitivo completo do repositório.
 

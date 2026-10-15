@@ -6,8 +6,8 @@ Inclui Value Flow, origem/destino, expressões de transformação e condições 
 
 ## Instalação
 
-1. Extraia `code-flow-lens-portable-0.13.5.zip`. O pacote inclui o visualizador, as dependências, o instalador e o VSIX; use Node.js 20 ou superior.
-2. Dentro da pasta extraída, execute `node install.cjs zed`. Ele copia os arquivos para `~/.code-flow-lens/0.13.5` e adiciona/atualiza as duas tarefas globais pelo nome. Os caminhos do Node e do visualizador são absolutos. Tarefas existentes recebem backup antes da alteração; outras tarefas e atalhos são preservados. JSONC inválido é recusado sem sobrescrever o arquivo.
+1. Extraia `code-flow-lens-portable-0.13.6.zip`. O pacote inclui o visualizador, as dependências, o instalador e o VSIX; use Node.js 20 ou superior.
+2. Dentro da pasta extraída, execute `node install.cjs zed`. Ele copia os arquivos para `~/.code-flow-lens/0.13.6` e adiciona/atualiza as duas tarefas globais pelo nome. Os caminhos do Node e do visualizador são absolutos. Tarefas existentes recebem backup antes da alteração; outras tarefas e atalhos são preservados. JSONC inválido é recusado sem sobrescrever o arquivo.
 3. No Zed, execute **task: spawn** e escolha **Code Flow Lens: Value Flow** ou **Code Flow Lens: Code Flow**. Feche o grafo antigo antes de abrir a versão atualizada.
 
 Os atalhos são opcionais: execute **zed: open keymap** e acrescente o objeto de [keymap.example.json](../zed/keymap.example.json), ajustando conflitos. No macOS, você pode trocar `ctrl-alt` por `cmd-alt`. O instalador preserva os atalhos personalizados.
